@@ -7,9 +7,10 @@ Bot de Telegram para obtenção de links de afiliados e promoções no AliExpres
 import re
 import os
 import time
-import pprint
 import json
+import pprint
 import urllib
+import logging
 import telebot
 from telebot import types
 from dotenv import load_dotenv
@@ -348,8 +349,10 @@ def manipular_botao_desconto(chamada):
 
 # ========== INICIALIZAÇÃO DO BOT ==========
 
-# Mantém a aplicação ativa
-keep_alive()
-
-# Inicia o bot com configurações de polling
-bot.infinity_polling(timeout=10, long_polling_timeout=5, none_stop=True)
+if __name__ == '__main__':
+    keep_alive()
+    bot.infinity_polling(
+        timeout=15,
+        long_polling_timeout=10,
+        logger_level=logging.INFO
+    )
