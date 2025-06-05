@@ -2,14 +2,20 @@ FROM python:3.10.12 AS builder
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
-WORKDIR /app
 
+WORKDIR /app
 
 RUN python -m venv .venv
-COPY requirements.txt ./
-RUN .venv/bin/pip install -r requirements.txt
+COPY requirements.txt .
+RUN .venv/bin/pip install --no-cache-dir -r requirements.txt
+
 FROM python:3.10.12-slim
+
+ENV PATH="/app/.venv/bin:$PATH"
+
 WORKDIR /app
-COPY --from=builder /app/.venv .venv/
+
+COPY --from=builder /app/.venv /app/.venv
 COPY . .
-CMD ["/app/.venv/bin/flask", "run", "--host=0.0.0.0", "--port=8080"]
+
+CMD ["python", "bot.py"]

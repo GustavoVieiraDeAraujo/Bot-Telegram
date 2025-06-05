@@ -1,116 +1,86 @@
-"""
-Bot de Telegram para obtenção de links de afiliados e promoções no AliExpress
-"""
-
-# ========== IMPORTANDO BIBLIOTECAS E INICIANDO BOT E API  ==========
-
-import re
 import os
-import time
+import re
 import json
+import time
 import pprint
 import urllib
 import logging
-import telebot
-from telebot import types
 from dotenv import load_dotenv
-from keep_alive import keep_alive
+from telebot import TeleBot, types
 from urllib.parse import urlparse, parse_qs
 from aliexpress_api import AliexpressApi, models
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 # Carrega variáveis de ambiente do arquivo .env
 load_dotenv()
 
 # Inicializa o bot do Telegram com o token da variável de ambiente
-bot = telebot.TeleBot(os.getenv('TOKEN_BOT'))
+TOKEN = os.getenv('TOKEN_BOT')
+if not TOKEN:
+    print("[ERRO] TOKEN_BOT não encontrado nas variáveis de ambiente.")
+    exit(1)
+bot = TeleBot(TOKEN, threaded=False)
 
-# Configura a API do AliExpress com as credenciais
-api_aliexpress = AliexpressApi(
-    os.getenv('CHAVE_APP'), 
-    os.getenv('SEGREDO_APP'),
-    models.Language.PT, 
-    models.Currency.BRL, 
-    os.getenv('ID_RASTREAMENTO')
-)
+# Configura a API do AliExpress
+try:
+    api_aliexpress = AliexpressApi(
+        os.getenv('CHAVE_APP'),
+        os.getenv('SEGREDO_APP'),
+        models.Language.PT,
+        models.Currency.BRL,
+        os.getenv('ID_RASTREAMENTO')
+    )
+    print("[OK] API do AliExpress configurada com sucesso.")
+except Exception as e:
+    print(f"[ERRO] Falha ao configurar API do AliExpress: {e}")
+    exit(1)
 
-# ========== CONFIGURAÇÃO DOS TECLADOS ==========
-
-# === Teclado inicial ===
+# Configuração dos teclados (mantida igual)
 teclado_inicial = types.InlineKeyboardMarkup(row_width=1)
+botao_jogos = types.InlineKeyboardButton("⭐️Jogos de colecionar moedas⭐️", callback_data="jogos")
+botao_desconto = types.InlineKeyboardButton("⭐️Desconto monetário em produtos da cesta 🛒⭐️", callback_data='clique')
+botao_tutorial = types.InlineKeyboardButton("🎬 Veja como o bot funciona 🎬", url=os.getenv('LINK_CANAL'))
+teclado_inicial.add(botao_jogos, botao_desconto, botao_tutorial)
 
-botao_jogos = types.InlineKeyboardButton(
-    "⭐️Jogos de colecionar moedas⭐️",
-    callback_data="jogos"
-)
-botao_desconto = types.InlineKeyboardButton(
-    "⭐️Desconto monetário em produtos da cesta 🛒⭐️",
-    callback_data='clique'
-)
-botao_tutorial = types.InlineKeyboardButton(
-    "🎬 Veja como o bot funciona 🎬",
-    url=os.getenv('LINK_CANAL'))
-botao_primeira_compra = types.InlineKeyboardButton(
-    "💰 Desconto exclusivo de até 70% na primeira compra 💰",
-    url=os.getenv('LINK_COMPARTILHAR_GANHAR')
-)
-
-teclado_inicial.add(botao_jogos, botao_desconto, botao_tutorial, botao_primeira_compra)
-
-# === Teclado padrão ===
 teclado_padrao = types.InlineKeyboardMarkup(row_width=1)
-
-botao_jogos_padrao = types.InlineKeyboardButton(
-    "⭐️Jogos de colecionar moedas⭐️",
-    callback_data="jogos"
-)
-botao_desconto_padrao = types.InlineKeyboardButton(
-    "⭐️Desconto monetário em produtos da cesta 🛒⭐️",
-    callback_data='clique'
-)
-botao_inscrever = types.InlineKeyboardButton(
-    "❤️ Inscreva-se no canal para mais promoções ❤️",
-    url=os.getenv('LINK_CANAL')
-)
-
+botao_jogos_padrao = types.InlineKeyboardButton("⭐️Jogos de colecionar moedas⭐️", callback_data="jogos")
+botao_desconto_padrao = types.InlineKeyboardButton("⭐️Desconto monetário em produtos da cesta 🛒⭐️", callback_data='clique')
+botao_inscrever = types.InlineKeyboardButton("❤️ Inscreva-se no canal para mais promoções ❤️", url=os.getenv('LINK_CANAL'))
 teclado_padrao.add(botao_jogos_padrao, botao_desconto_padrao, botao_inscrever)
 
-# === Teclado coleta de moedas ===
 teclado_jogos = types.InlineKeyboardMarkup(row_width=1)
-
-botao_revisao_diaria = types.InlineKeyboardButton(
-    " ⭐️ Página de revisão diária e coleta de pontos ⭐️",
-    url="https://s.click.aliexpress.com/e/_ol8VJ2T"
-)
-botao_merge_boss = types.InlineKeyboardButton(
-    "⭐️ Jogo Merge boss ⭐️", 
-    url="https://s.click.aliexpress.com/e/_DlCyg5Z"
-)
-botao_fazenda_fantastica = types.InlineKeyboardButton(
-    "⭐️ Jogo Fantastic Farm ⭐️",
-    url="https://s.click.aliexpress.com/e/_DBBkt9V"
-)
-botao_gire_ganhe = types.InlineKeyboardButton(
-    "⭐️ Jogo Vire e Ganhe ⭐️",
-    url="https://s.click.aliexpress.com/e/_DdcXZ2r"
-)
-botao_gogo_match = types.InlineKeyboardButton(
-    "⭐️ Jogo GoGo Match ⭐️", 
-    url="https://s.click.aliexpress.com/e/_DDs7W5D"
-)
-
+botao_revisao_diaria = types.InlineKeyboardButton(" ⭐️ Página de revisão diária e coleta de pontos ⭐️", url="https://s.click.aliexpress.com/e/_ol8VJ2T")
+botao_merge_boss = types.InlineKeyboardButton("⭐️ Jogo Merge boss ⭐️", url="https://s.click.aliexpress.com/e/_DlCyg5Z")
+botao_fazenda_fantastica = types.InlineKeyboardButton("⭐️ Jogo Fantastic Farm ⭐️", url="https://s.click.aliexpress.com/e/_DBBkt9V")
+botao_gire_ganhe = types.InlineKeyboardButton("⭐️ Jogo Vire e Ganhe ⭐️", url="https://s.click.aliexpress.com/e/_DdcXZ2r")
+botao_gogo_match = types.InlineKeyboardButton("⭐️ Jogo GoGo Match ⭐️", url="https://s.click.aliexpress.com/e/_DDs7W5D")
 teclado_jogos.add(botao_revisao_diaria, botao_merge_boss, botao_fazenda_fantastica, botao_gire_ganhe, botao_gogo_match)
 
-# ========== Funções Auxiliriares ==========
+# Funções auxiliares (mantidas igual)
+
+class WebhookHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
+        update = json.loads(post_data.decode('utf-8'))
+
+        try:
+            if 'message' in update or 'callback_query' in update:
+                bot.process_new_updates([types.Update.de_json(update)])
+                print("[OK] Update processado com sucesso.")
+        except Exception as e:
+            logging.error(f"Erro ao processar update: {e}")
+
+        self.send_response(200)
+        self.end_headers()
+
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type','text/html')
+        self.end_headers()
+        self.wfile.write("Bot está rodando.".encode('utf-8'))
 
 def obter_links_afiliados(mensagem, id_mensagem, link_produto):
-    """
-    Obtém e envia links de afiliados para um produto do AliExpress.
-    
-    Args:
-        mensagem: Objeto de mensagem do Telegram.
-        link_produto: URL do produto no AliExpress.
-        id_mensagem: ID da mensagem a ser deletada/atualizada.
-    """
     try:
         codigo_rastreamento = os.getenv('ID_RASTREAMENTO')
         links_afiliados = api_aliexpress.get_affiliate_links(
@@ -121,7 +91,6 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
         link_afiliado = link_super = link_limitado = links_afiliados[0].promotion_link
 
         try:
-            # Obtém detalhes do produto (imagem, preço, título)
             timestamp = str(int(float("%.2f" % (float(time.time()))) * 1000))
             detalhes_produto = api_aliexpress.get_products_details([
                 timestamp,
@@ -135,7 +104,6 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
             
             bot.delete_message(mensagem.chat.id, id_mensagem)
             
-            # Envia a mensagem com a imagem e informações do produto
             bot.send_photo(
                 mensagem.chat.id,
                 imagem_produto,
@@ -149,7 +117,6 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
             )
 
         except Exception as e:
-            # Caso falhe ao obter detalhes, envia apenas os links
             bot.delete_message(mensagem.chat.id, id_mensagem)
             bot.send_message(
                 mensagem.chat.id, 
@@ -169,37 +136,19 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
     except Exception as e:
         bot.send_message(
             mensagem.chat.id, 
-            "Algo deu errado 🤷🏻‍♂️ \n " + str(link_limitado)
+            "Algo deu errado 🤷🏻‍♂️ \n " + str(e)
         )
 
 def extrair_url_do_texto(texto):
-    """
-    Extrai a primeira URL encontrada em um texto.
-    
-    Args:
-        texto: Texto contendo possíveis URLs.
-        
-    Returns:
-        str: A primeira URL encontrada ou None se não houver.
-    """
     padrao_url = r'https?://\S+|www\.\S+'
     urls = re.findall(padrao_url, texto)
     return urls[0] if urls else None
 
 def construir_link_carrinho(link_original):
-    """
-    Constrói um link de carrinho de compras a partir de um link de produto.
-    
-    Args:
-        link_original: URL do produto no AliExpress.
-        
-    Returns:
-        str: URL formatada para o carrinho de compras.
-    """
     parametros = extrair_parametros_url(link_original)
     url_base_carrinho = "https://www.aliexpress.com/p/trade/confirm.html?"
     parametros_carrinho = {
-        "availableProductShopcartIds": ",".join(parametros["availableProductShopcartIds"]),
+        "availableProductShopcartIds": ",".join(parametros.get("availableProductShopcartIds", [])),
         "extraParams": json.dumps(
             {"channelInfo": {"sourceType": "620"}}, 
             separators=(',', ':')
@@ -208,39 +157,13 @@ def construir_link_carrinho(link_original):
     return criar_url_com_parametros(url_base_carrinho, parametros_carrinho)
 
 def extrair_parametros_url(url):
-    """
-    Extrai os parâmetros de query de uma URL.
-    
-    Args:
-        url: URL a ser analisada.
-        
-    Returns:
-        dict: Dicionário com os parâmetros da query string.
-    """
     url_analisada = urlparse(url)
     return parse_qs(url_analisada.query)
 
 def criar_url_com_parametros(url_base, parametros):
-    """
-    Cria uma URL com parâmetros de query string.
-    
-    Args:
-        url_base: URL base sem parâmetros.
-        parametros: Dicionário com os parâmetros.
-        
-    Returns:
-        str: URL completa com query string.
-    """
     return url_base + urllib.parse.urlencode(parametros)
 
 def obter_link_desconto_carrinho(link_carrinho, mensagem):
-    """
-    Obtém e envia link de afiliado para o carrinho de compras.
-    
-    Args:
-        link_carrinho: URL do carrinho de compras.
-        mensagem: Objeto de mensagem do Telegram.
-    """
     try:
         link_carrinho_formatado = construir_link_carrinho(link_carrinho)
         link_afiliado = api_aliexpress.get_affiliate_links(link_carrinho_formatado)[0].promotion_link
@@ -254,105 +177,130 @@ def obter_link_desconto_carrinho(link_carrinho, mensagem):
         bot.send_photo(mensagem.chat.id, imagem_carrinho, caption=mensagem_desconto)
 
     except Exception as e:
-        bot.send_message(mensagem.id, "Algo deu errado 🤷🏻‍♂️")
+        bot.send_message(mensagem.chat.id, f"Algo deu errado 🤷🏻‍♂️ \n{e}")
 
-@bot.message_handler(func=lambda mensagem: True)
-def manipular_link_produto(mensagem):
+def registrar_handlers():
     """
-    Manipula mensagens contendo links de produtos do AliExpress.
-    
-    Args:
-        mensagem: Objeto de mensagem do Telegram.
+    Registra todos os handlers do bot:
+    - Comandos (/start, etc)
+    - Callback queries (botões)
+    - Mensagens de texto
     """
-    url_produto = extrair_url_do_texto(mensagem.text)
-    mensagem_carregando = bot.send_message(
-        mensagem.chat.id,
-        'Aguarde um momento, as ofertas estão sendo preparadas ⏳'
-    )
     
-    if url_produto and "aliexpress.com" in url_produto:
-        if "p/shoppingcart" in mensagem.text.lower():
-            return
-            
-        if "availableProductShopcartIds".lower() in mensagem.text.lower():
-            obter_link_desconto_carrinho(url_produto, mensagem)
-            return
-            
-        obter_links_afiliados(mensagem, mensagem_carregando.message_id, url_produto)
-    else:
-        bot.delete_message(mensagem.chat.id, mensagem_carregando.message_id)
+    @bot.message_handler(commands=['start'])
+    def handle_start(mensagem):
+        print(f"[INFO] Comando /start recebido do usuário {mensagem.from_user.id}")
         bot.send_message(
             mensagem.chat.id,
-            "O link é inválido! Verifique o link do produto ou tente novamente.\n"
-            "Envie apenas o link sem o título do produto.",
-            parse_mode='HTML'
+            "👋 Olá! Seja bem-vindo!\nEscolha uma das opções abaixo:",
+            reply_markup=teclado_padrao
         )
 
-@bot.callback_query_handler(func=lambda chamada: True)
-def manipular_botao_jogos(chamada):
-    """
-    Manipula o clique no botão de jogos, mostrando opções de jogos para coleta de moedas.
-    
-    Args:
-        chamada: Objeto de callback da interação com o botão inline.
-    """
-    bot.send_message(chamada.message.chat.id, "..")
+    @bot.callback_query_handler(func=lambda call: True)
+    def handle_callback_query(chamada):
+        print(f"[INFO] Callback query recebida: {chamada.data}")
+        try:
+            if chamada.data == 'jogos':
+                bot.send_message(chamada.message.chat.id, "Buscando informações...")
+                url_imagem_jogos = "https://picsum.photos/784/449"
+                bot.send_photo(
+                    chamada.message.chat.id,
+                    url_imagem_jogos,
+                    caption=(
+                        "⭐️Jogos de colecionar moedas⭐️\n"
+                        "Reúna moedas em vários jogos. O valor de cada moeda é igual a R$0,01. \n\n"
+                        "💰Você pode trocar moedas acumuladas por desconto em produtos no AliExpress."
+                    ),
+                    reply_markup=teclado_jogos
+                )
 
-    url_imagem_jogos = "https://picsum.photos/784/449"
-    bot.send_photo(
-        chamada.message.chat.id,
-        url_imagem_jogos,
-        caption=(
-            "Links para jogos de colecionar moedas para usar para reduzir o preço de alguns produtos. "
-            "Faça login diariamente para obter o maior número possível por dia 👇"
-        ),
-        reply_markup=teclado_jogos
-    )
+            elif chamada.data == 'clique':
+                url_desconto_carrinho = "https://s.click.aliexpress.com/e/_Ddcx7vA"
+                bot.send_message(
+                    chamada.message.chat.id,
+                    f"Seu link para desconto no carrinho: \n{url_desconto_carrinho}",
+                    reply_markup=teclado_padrao
+                )
 
-@bot.message_handler(commands=['start'])
-def boas_vindas(mensagem):
-    """
-    Envia mensagem de boas-vindas quando o usuário inicia o bot.
-    
-    Args:
-        mensagem: Objeto de mensagem do Telegram contendo informações do chat.
-    """
-    bot.send_message(
-        mensagem.chat.id,
-        "Por favor, envie-nos o link do produto que deseja comprar para que possamos lhe oferecer o melhor preço 👌 \n",
-        reply_markup=teclado_inicial
-    )
+        except Exception as e:
+            print(f"[ERRO] Falha ao processar callback query: {e}")
+            bot.send_message(
+                chamada.message.chat.id,
+                "⚠️ Erro interno ao processar sua solicitação."
+            )
 
-@bot.callback_query_handler(func=lambda chamada: chamada.data == 'clique')
-def manipular_botao_desconto(chamada):
-    """
-    Manipula o clique no botão de desconto, mostrando instruções para obter descontos.
-    
-    Args:
-        chamada: Objeto de callback da interação com o botão inline.
-    """
-    texto_instrucoes = (
-        "✅1- Entre no carrinho por aqui:\n"
-        " https://s.click.aliexpress.com/e/_opGCtMf \n"
-        "✅2- Escolha os produtos que deseja reduzir o preço\n"
-        "✅3- Clique no botão de pagamento para ser redirecionado para a página de confirmação\n"
-        "✅4- Clique no ícone acima e copie o link aqui no bot para obter o link de desconto"
-    )
+    @bot.message_handler(func=lambda m: True)
+    def handle_mensagem(mensagem):
+        print(f"[INFO] Mensagem recebida do usuário {mensagem.from_user.id}")
+        
+        if mensagem.text.startswith("/"):
+            return
+            
+        try:
+            url_produto = extrair_url_do_texto(mensagem.text)
+            mensagem_carregando = bot.send_message(
+                mensagem.chat.id,
+                "⏳ Aguarde um momento, as ofertas estão sendo preparadas..."
+            )
 
-    url_imagem_carrinho = "https://picsum.photos/1022/771"
-    bot.send_photo(
-        chamada.message.chat.id,
-        url_imagem_carrinho,
-        caption=texto_instrucoes,
-        reply_markup=teclado_padrao
-    )
+            if url_produto and "aliexpress.com" in url_produto:
+                if "p/shoppingcart" in mensagem.text.lower():
+                    return
 
-# ========== INICIALIZAÇÃO DO BOT ==========
+                if "availableProductShopcartIds" in mensagem.text.lower():
+                    obter_link_desconto_carrinho(url_produto, mensagem)
+                    return
 
-if __name__ == '__main__':
-    keep_alive()
-    bot.infinity_polling(
-        timeout=15,
-        long_polling_timeout=10,
-        logger_level=logging.INFO
-    )
+                obter_links_afiliados(mensagem, mensagem_carregando.message_id, url_produto)
+            else:
+                bot.delete_message(mensagem.chat.id, mensagem_carregando.message_id)
+                bot.send_message(
+                    mensagem.chat.id,
+                    "❌ O link é inválido!\nVerifique o link do produto.",
+                    parse_mode='HTML'
+                )
+
+        except Exception as e:
+            print(f"[ERRO] Falha ao processar mensagem: {e}")
+            bot.send_message(
+                mensagem.chat.id,
+                "⚠️ Erro interno ao processar sua mensagem. Tente novamente."
+            )
+
+    print("[OK] Handler para mensagens registrado.")
+
+def start_server():
+    PORT = int(os.getenv('PORT', 8080))
+    server_address = ('', PORT)
+    httpd = HTTPServer(server_address, WebhookHandler)
+    print(f"[OK] Servidor HTTP iniciado na porta {PORT}.")
+    httpd.serve_forever()
+
+def configurar_webhook():
+    url_webhook = os.getenv('URL_WEBHOOK')
+    if not url_webhook:
+        print("[ERRO] WEBHOOK_URL não configurado nas variáveis de ambiente.")
+        return False
+    try:
+        bot.remove_webhook()
+        time.sleep(1)
+        sucesso = bot.set_webhook(url_webhook)
+        if sucesso:
+            print(f"[OK] Webhook configurado: {url_webhook}")
+            return True
+        else:
+            print("[ERRO] Falha ao configurar webhook.")
+            return False
+    except Exception as e:
+        print(f"[ERRO] Exceção ao configurar webhook: {e}")
+        return False
+
+if __name__ == "__main__":
+    print("[INFO] Inicializando bot...")
+
+    registrar_handlers()
+
+    if configurar_webhook():
+        start_server()
+    else:
+        print("[ERRO] Bot não iniciou devido a problema no webhook.")

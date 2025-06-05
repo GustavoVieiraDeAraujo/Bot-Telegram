@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for bot-telegram-floral-sea-5402 on 2025-05-31T17:36:21-03:00
+# fly.toml app configuration file generated for bot-telegram-solitary-dawn-1104 on 2025-06-04T22:06:14-03:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'bot-telegram-floral-sea-5402'
+app = 'bot-telegram-solitary-dawn-1104'
 primary_region = 'gru'
 
 [build]
