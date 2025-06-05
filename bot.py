@@ -3,25 +3,21 @@ import re
 import json
 import time
 import pprint
-import urllib
 import logging
 from dotenv import load_dotenv
 from telebot import TeleBot, types
-from urllib.parse import urlparse, parse_qs
 from aliexpress_api import AliexpressApi, models
+from urllib.parse import urlparse, parse_qs, urlencode
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-# Carrega variáveis de ambiente do arquivo .env
 load_dotenv()
 
-# Inicializa o bot do Telegram com o token da variável de ambiente
 TOKEN = os.getenv('TOKEN_BOT')
 if not TOKEN:
     print("[ERRO] TOKEN_BOT não encontrado nas variáveis de ambiente.")
     exit(1)
 bot = TeleBot(TOKEN, threaded=False)
 
-# Configura a API do AliExpress
 try:
     api_aliexpress = AliexpressApi(
         os.getenv('CHAVE_APP'),
@@ -35,28 +31,19 @@ except Exception as e:
     print(f"[ERRO] Falha ao configurar API do AliExpress: {e}")
     exit(1)
 
-# Configuração dos teclados (mantida igual)
-teclado_inicial = types.InlineKeyboardMarkup(row_width=1)
-botao_jogos = types.InlineKeyboardButton("⭐️Jogos de colecionar moedas⭐️", callback_data="jogos")
-botao_desconto = types.InlineKeyboardButton("⭐️Desconto monetário em produtos da cesta 🛒⭐️", callback_data='clique')
-botao_tutorial = types.InlineKeyboardButton("🎬 Veja como o bot funciona 🎬", url=os.getenv('LINK_CANAL'))
-teclado_inicial.add(botao_jogos, botao_desconto, botao_tutorial)
+menu_padrao = types.InlineKeyboardMarkup(row_width=1)
+botao_chat = types.InlineKeyboardButton("💬 Chat 💬", url=os.getenv('LINK_TELEGRAM_CHAT'))
+botao_promocoes = types.InlineKeyboardButton("🔥 Promoções 🔥", url=os.getenv('LINK_TELEGRAM_OFERTAS'))
+botao_youtube = types.InlineKeyboardButton("🎥 Youtube 🎥", url=os.getenv('LINK_YOUTUBE'))
+menu_padrao.add(botao_chat, botao_promocoes, botao_youtube)
 
-teclado_padrao = types.InlineKeyboardMarkup(row_width=1)
-botao_jogos_padrao = types.InlineKeyboardButton("⭐️Jogos de colecionar moedas⭐️", callback_data="jogos")
-botao_desconto_padrao = types.InlineKeyboardButton("⭐️Desconto monetário em produtos da cesta 🛒⭐️", callback_data='clique')
-botao_inscrever = types.InlineKeyboardButton("❤️ Inscreva-se no canal para mais promoções ❤️", url=os.getenv('LINK_CANAL'))
-teclado_padrao.add(botao_jogos_padrao, botao_desconto_padrao, botao_inscrever)
-
-teclado_jogos = types.InlineKeyboardMarkup(row_width=1)
-botao_revisao_diaria = types.InlineKeyboardButton(" ⭐️ Página de revisão diária e coleta de pontos ⭐️", url="https://s.click.aliexpress.com/e/_ol8VJ2T")
-botao_merge_boss = types.InlineKeyboardButton("⭐️ Jogo Merge boss ⭐️", url="https://s.click.aliexpress.com/e/_DlCyg5Z")
-botao_fazenda_fantastica = types.InlineKeyboardButton("⭐️ Jogo Fantastic Farm ⭐️", url="https://s.click.aliexpress.com/e/_DBBkt9V")
-botao_gire_ganhe = types.InlineKeyboardButton("⭐️ Jogo Vire e Ganhe ⭐️", url="https://s.click.aliexpress.com/e/_DdcXZ2r")
-botao_gogo_match = types.InlineKeyboardButton("⭐️ Jogo GoGo Match ⭐️", url="https://s.click.aliexpress.com/e/_DDs7W5D")
-teclado_jogos.add(botao_revisao_diaria, botao_merge_boss, botao_fazenda_fantastica, botao_gire_ganhe, botao_gogo_match)
-
-# Funções auxiliares (mantidas igual)
+menu_admin = types.InlineKeyboardMarkup(row_width=1)
+um = types.InlineKeyboardButton("1", url="https://s.click.aliexpress.com/e/_ol8VJ2T")
+dois = types.InlineKeyboardButton("2", url="https://s.click.aliexpress.com/e/_DlCyg5Z")
+tres = types.InlineKeyboardButton("3", url="https://s.click.aliexpress.com/e/_DBBkt9V")
+quatro = types.InlineKeyboardButton("4", url="https://s.click.aliexpress.com/e/_DdcXZ2r")
+cinco = types.InlineKeyboardButton("5", url="https://s.click.aliexpress.com/e/_DDs7W5D")
+menu_admin.add(um, dois, tres, quatro, cinco, botao_chat, botao_promocoes, botao_youtube)
 
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -83,60 +70,44 @@ class WebhookHandler(BaseHTTPRequestHandler):
 def obter_links_afiliados(mensagem, id_mensagem, link_produto):
     try:
         codigo_rastreamento = os.getenv('ID_RASTREAMENTO')
-        links_afiliados = api_aliexpress.get_affiliate_links(
-            f'{link_produto}?utm_source={codigo_rastreamento}&sourceType=620&improveDiscount=Y&BuyNow=true'
-        )
+        links_afiliados = api_aliexpress.get_affiliate_links(f'{link_produto}?utm_source={codigo_rastreamento}&sourceType=620&improveDiscount=Y&BuyNow=true')
         
         pprint.pp(links_afiliados)
         link_afiliado = link_super = link_limitado = links_afiliados[0].promotion_link
 
-        try:
-            timestamp = str(int(float("%.2f" % (float(time.time()))) * 1000))
-            detalhes_produto = api_aliexpress.get_products_details([
-                timestamp,
-                f'https://star.aliexpress.com/share/share.htm?platform=AE&businessType=ProductDetail&redirectUrl={link_produto}'
-            ])
-            
-            pprint.pp(detalhes_produto)
-            preco_produto = detalhes_produto[0].target_sale_price
-            titulo_produto = detalhes_produto[0].product_title
-            imagem_produto = detalhes_produto[0].product_main_image_url
-            
-            bot.delete_message(mensagem.chat.id, id_mensagem)
-            
-            bot.send_photo(
-                mensagem.chat.id,
-                imagem_produto,
-                caption=(
-                    " \nSeu produto é: 🔥 \n"
-                    f"{titulo_produto} 🛍 \n"
-                    f"Preço do produto: {preco_produto} 💵\n"
-                    f"\nLink {link_afiliado}"
-                ),
-                reply_markup=teclado_padrao
-            )
-
-        except Exception as e:
-            bot.delete_message(mensagem.chat.id, id_mensagem)
-            bot.send_message(
-                mensagem.chat.id, 
-                (
-                    "Compare preços e compre 🔥 \n"
-                    "💰 Exibição de moeda (preço final na finalização da compra): \n"
-                    f"Link {link_afiliado} \n"
-                    f"💎 Super oferta: \n"
-                    f"Link {link_super} \n"
-                    f"♨️ Oferta limitada: \n"
-                    f"Link {link_limitado} \n\n"
-                    "#PromocaoAliXpress ✅"
-                ),
-                reply_markup=teclado_padrao
-            )
-
+        timestamp = str(int(float("%.2f" % (float(time.time()))) * 1000))
+        detalhes_produto = api_aliexpress.get_products_details([timestamp,f'https://star.aliexpress.com/share/share.htm?platform=AE&businessType=ProductDetail&redirectUrl={link_produto}'])
+        
+        pprint.pp(detalhes_produto)
+        titulo_produto = detalhes_produto[0].product_title
+        preco_produto = detalhes_produto[0].target_sale_price
+        imagem_produto = detalhes_produto[0].product_main_image_url
+        
+        bot.delete_message(mensagem.chat.id, id_mensagem)
+        
+        bot.send_photo(
+            mensagem.chat.id,
+            imagem_produto,
+            caption=(
+                "🛒 Seu produto é:\n\n"
+                f"{titulo_produto}\n\n"
+                f"💵 *Preço do produto:* R$ {float(preco_produto):,.2f}\n\n"
+                f"🔗 *Link do produto:* {link_afiliado}\n\n"
+                f"Compare preços e compre \n\n"
+                f"💰 Exibição de moeda (preço final na finalização da compra): \n\n"
+                f"Link {link_afiliado} \n\n"
+                f"💎 Super oferta: \n\n"
+                f"Link {link_super} \n\n"
+                f"♨️ Oferta limitada: \n\n"
+                f"Link {link_limitado} \n\n"
+                "#PromocaoAliXpress:✅"
+            ),
+            reply_markup=menu_padrao
+        )
     except Exception as e:
         bot.send_message(
             mensagem.chat.id, 
-            "Algo deu errado 🤷🏻‍♂️ \n " + str(e)
+            "Algo deu errado \n " + str(e)
         )
 
 def extrair_url_do_texto(texto):
@@ -161,7 +132,7 @@ def extrair_parametros_url(url):
     return parse_qs(url_analisada.query)
 
 def criar_url_com_parametros(url_base, parametros):
-    return url_base + urllib.parse.urlencode(parametros)
+    return url_base + urlencode(parametros)
 
 def obter_link_desconto_carrinho(link_carrinho, mensagem):
     try:
@@ -173,69 +144,61 @@ def obter_link_desconto_carrinho(link_carrinho, mensagem):
             f"{str(link_afiliado)}"
         )
 
-        imagem_carrinho = "https://picsum.photos/1022/771"
-        bot.send_photo(mensagem.chat.id, imagem_carrinho, caption=mensagem_desconto)
-
+        caminho_imagem = "assets/bibi-1.jpg"
+        with open(caminho_imagem, "rb") as img:
+            bot.send_photo(mensagem.chat.id, img, caption=mensagem_desconto)
     except Exception as e:
-        bot.send_message(mensagem.chat.id, f"Algo deu errado 🤷🏻‍♂️ \n{e}")
+        bot.send_message(mensagem.chat.id, f"Algo deu errado \n{e}")
 
 def registrar_handlers():
     """
     Registra todos os handlers do bot:
+    - Mensagens de texto
     - Comandos (/start, etc)
     - Callback queries (botões)
-    - Mensagens de texto
     """
     
     @bot.message_handler(commands=['start'])
     def handle_start(mensagem):
-        print(f"[INFO] Comando /start recebido do usuário {mensagem.from_user.id}")
-        bot.send_message(
-            mensagem.chat.id,
-            "👋 Olá! Seja bem-vindo!\nEscolha uma das opções abaixo:",
-            reply_markup=teclado_padrao
-        )
+        user_id = mensagem.from_user.id
+        nome_usuario = mensagem.from_user.first_name
 
-    @bot.callback_query_handler(func=lambda call: True)
-    def handle_callback_query(chamada):
-        print(f"[INFO] Callback query recebida: {chamada.data}")
-        try:
-            if chamada.data == 'jogos':
-                bot.send_message(chamada.message.chat.id, "Buscando informações...")
-                url_imagem_jogos = "https://picsum.photos/784/449"
-                bot.send_photo(
-                    chamada.message.chat.id,
-                    url_imagem_jogos,
-                    caption=(
-                        "⭐️Jogos de colecionar moedas⭐️\n"
-                        "Reúna moedas em vários jogos. O valor de cada moeda é igual a R$0,01. \n\n"
-                        "💰Você pode trocar moedas acumuladas por desconto em produtos no AliExpress."
-                    ),
-                    reply_markup=teclado_jogos
-                )
+        if user_id == 5206185262:
+            menu = menu_admin
+            mensagem_boas_vindas = (
+                f"🔐 Olá Papai {nome_usuario}!\n\n"
+                "Você está no menu Admin.\n\n"
+                "Com este painel, você pode:\n\n"
+                "🛠 Enviar notificações aos usuários\n"
+                "📊 Ver estatísticas de uso\n"
+                "📦 Gerenciar promoções e ofertas\n"
+                "👥 Ver lista de usuários ativos\n\n"
+                "⚠️ Use as funcionalidades com responsabilidade!"
+            )
+        else:
+            menu = menu_padrao
+            mensagem_boas_vindas = (
+                f"👋 Olá, {nome_usuario}! Seja bem-vindo ao bot de ofertas do AliExpress!\n\n"
+                "Envie qualquer link do AliExpress para gerar:\n\n"
+                "🤑 Bônus de Moedas | 🔥 Super Oferta | ⚡ Oferta Relâmpago\n\n"
+                "📌 *Como usar:*\n\n"
+                "1️⃣ Envie um link do AliExpress\n"
+                "2️⃣ Escolha a promoção desejada\n"
+                "3️⃣ Aproveite seus descontos!\n\n"
+                "🔗 *Nossos canais:*"
+            )
 
-            elif chamada.data == 'clique':
-                url_desconto_carrinho = "https://s.click.aliexpress.com/e/_Ddcx7vA"
-                bot.send_message(
-                    chamada.message.chat.id,
-                    f"Seu link para desconto no carrinho: \n{url_desconto_carrinho}",
-                    reply_markup=teclado_padrao
-                )
-
-        except Exception as e:
-            print(f"[ERRO] Falha ao processar callback query: {e}")
-            bot.send_message(
-                chamada.message.chat.id,
-                "⚠️ Erro interno ao processar sua solicitação."
+        with open('assets/bibi-2.jpg', 'rb') as foto:
+            bot.send_photo(
+                mensagem.chat.id,
+                foto,
+                caption=mensagem_boas_vindas,
+                reply_markup=menu,
+                parse_mode="Markdown"
             )
 
     @bot.message_handler(func=lambda m: True)
     def handle_mensagem(mensagem):
-        print(f"[INFO] Mensagem recebida do usuário {mensagem.from_user.id}")
-        
-        if mensagem.text.startswith("/"):
-            return
-            
         try:
             url_produto = extrair_url_do_texto(mensagem.text)
             mensagem_carregando = bot.send_message(
@@ -259,14 +222,13 @@ def registrar_handlers():
                     "❌ O link é inválido!\nVerifique o link do produto.",
                     parse_mode='HTML'
                 )
-
         except Exception as e:
             print(f"[ERRO] Falha ao processar mensagem: {e}")
             bot.send_message(
                 mensagem.chat.id,
                 "⚠️ Erro interno ao processar sua mensagem. Tente novamente."
             )
-
+    
     print("[OK] Handler para mensagens registrado.")
 
 def start_server():
