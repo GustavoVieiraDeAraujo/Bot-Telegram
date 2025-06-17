@@ -139,7 +139,7 @@ def construir_link_promocao(link_original):
         "https://m.aliexpress.com/p/coin-index/index.html"
         "?_immersiveMode=true"
         f"&productIds={object_id}"
-    )j
+    )
     
     pprint.pprint(url_promocao)
     return url_promocao
