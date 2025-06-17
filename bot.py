@@ -122,8 +122,10 @@ def extrair_url_do_texto(texto):
 
 def construir_link_promocao(link_original):
     parametros = extrair_parametros_url(link_original)
+    pprint.pprint(parametros)
 
     object_id = parametros.get("product_id", [None])[0]
+    pprint.pprint(object_id)
     
     if not object_id:
         m = re.search(r'/item/(\d+).html', link_original)
@@ -137,7 +139,7 @@ def construir_link_promocao(link_original):
         "https://m.aliexpress.com/p/coin-index/index.html"
         "?_immersiveMode=true"
         f"&productIds={object_id}"
-    )
+    )j
     
     pprint.pprint(url_promocao)
     return url_promocao
