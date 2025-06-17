@@ -124,6 +124,7 @@ def construir_link_promocao(link_original):
     parametros = extrair_parametros_url(link_original)
 
     object_id = parametros.get("product_id", [None])[0]
+    
     if not object_id:
         m = re.search(r'/item/(\d+).html', link_original)
         if m:
@@ -137,6 +138,8 @@ def construir_link_promocao(link_original):
         "?_immersiveMode=true"
         f"&productIds={object_id}"
     )
+    
+    pprint.pprint(url_promocao)
     return url_promocao
 
 def extrair_parametros_url(url):
