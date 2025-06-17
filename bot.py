@@ -48,7 +48,7 @@ menu_admin.add(um, dois, tres, quatro, cinco, botao_chat, botao_promocoes, botao
 
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_POST(self):
-        content_length = int(self.headers['Content-Length'])
+        content_length = int(self.headers.get('Content-Length', 0))
         post_data = self.rfile.read(content_length)
         update = json.loads(post_data.decode('utf-8'))
 
@@ -60,11 +60,13 @@ class WebhookHandler(BaseHTTPRequestHandler):
             logging.error(f"Erro ao processar update: {e}")
 
         self.send_response(200)
+        self.send_header('Content-type', 'text/plain; charset=utf-8')
         self.end_headers()
+        self.wfile.write(b'OK')
 
     def do_GET(self):
         self.send_response(200)
-        self.send_header('Content-type','text/html')
+        self.send_header('Content-type','text/html; charset=utf-8')
         self.end_headers()
         self.wfile.write("Bot está rodando.".encode('utf-8'))
 
@@ -321,7 +323,6 @@ def resolver_link_ali(link_encurtado, max_redirects=5):
             break
     url_final = extrair_redirect_url_recursiva(url)
     return url_final
-
 
 if __name__ == "__main__":
     print("[INFO] Inicializando bot...")
