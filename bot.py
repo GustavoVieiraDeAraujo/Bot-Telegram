@@ -78,21 +78,15 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
 def obter_links_afiliados(mensagem, id_mensagem, link_produto):
     try:
-        codigo_rastreamento = os.getenv('ID_RASTREAMENTO')
-
         link_promocao = construir_link_promocao(link_produto)
+        logging.info(f"Link Produto: {link_produto}")
         logging.info(f"Link Moedas: {link_promocao}")
-
-        link_carrinho_com_rastreamento = (
-            f'{link_produto}?utm_source={codigo_rastreamento}'
-        )
         
-        logging.info(f"Link Produto com Rastreamento: {link_carrinho_com_rastreamento}")
-
-        links_afiliados = api_aliexpress.get_affiliate_links(link_carrinho_com_rastreamento)
-        link_moedas = api_aliexpress.get_affiliate_links(link_promocao)
-        link_afiliado = link_afiliado[0].promotion_link
-        logging.info(f"Link Afiliado Produto: {links_afiliados}")
+        response_afiliados = api_aliexpress.get_affiliate_links(link_produto)
+        response_moedas = api_aliexpress.get_affiliate_links(link_promocao)
+        
+        link_afiliado = response_afiliados[0].promotion_link
+        link_moedas = response_moedas[0].promotion_link
 
         timestamp = str(int(float("%.2f" % (float(time.time()))) * 1000))
         detalhes_produto = api_aliexpress.get_products_details([
@@ -134,10 +128,8 @@ def extrair_url_do_texto(texto):
 
 def construir_link_promocao(link_original):
     parametros = extrair_parametros_url(link_original)
-    logging.info(f"Parâmetros extraídos: {parametros}")
-
+    
     object_id = parametros.get("product_id", [None])[0]
-    logging.info(f"ID do objeto: {object_id}")
 
     if not object_id:
         m = re.search(r'/item/(\d+).html', link_original)
@@ -153,7 +145,6 @@ def construir_link_promocao(link_original):
         f"&productIds={object_id}"
     )
 
-    logging.info(f"URL de promoção: {url_promocao}")
     return url_promocao
 
 def extrair_parametros_url(url):
