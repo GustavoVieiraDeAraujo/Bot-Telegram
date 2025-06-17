@@ -1,8 +1,8 @@
 import os
 import re
+import sys
 import json
 import time
-import pprint
 import logging
 import requests
 from dotenv import load_dotenv
@@ -10,6 +10,12 @@ from telebot import TeleBot, types
 from aliexpress_api import AliexpressApi, models
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse, parse_qs, urlencode, unquote
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s: %(message)s',
+    stream=sys.stdout
+)
 
 load_dotenv()
 
@@ -122,11 +128,11 @@ def extrair_url_do_texto(texto):
 
 def construir_link_promocao(link_original):
     parametros = extrair_parametros_url(link_original)
-    print(parametros)
+    logging.info(f"Parâmetros extraídos: {parametros}")
 
     object_id = parametros.get("product_id", [None])[0]
-    print(object_id)
-    
+    logging.info(f"ID do objeto: {object_id}")
+
     if not object_id:
         m = re.search(r'/item/(\d+).html', link_original)
         if m:
@@ -140,8 +146,8 @@ def construir_link_promocao(link_original):
         "?_immersiveMode=true"
         f"&productIds={object_id}"
     )
-    
-    print(url_promocao)
+
+    logging.info(f"URL de promoção: {url_promocao}")
     return url_promocao
 
 def extrair_parametros_url(url):
