@@ -1,5 +1,5 @@
 echo ">> Atualizando código do Git"
-git pull origin main
+git pull
 
 echo ">> Parando e removendo container antigo"
 docker stop bot-telegram || true
