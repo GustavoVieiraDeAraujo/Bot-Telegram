@@ -122,10 +122,10 @@ def extrair_url_do_texto(texto):
 
 def construir_link_promocao(link_original):
     parametros = extrair_parametros_url(link_original)
-    pprint.pprint(parametros)
+    logging.info(pprint.pformat(parametros))
 
     object_id = parametros.get("product_id", [None])[0]
-    pprint.pprint(object_id)
+    logging.info(pprint.pprint(object_id))
     
     if not object_id:
         m = re.search(r'/item/(\d+).html', link_original)
@@ -141,7 +141,7 @@ def construir_link_promocao(link_original):
         f"&productIds={object_id}"
     )
     
-    pprint.pprint(url_promocao)
+    logging.info(pprint.pprint(url_promocao))
     return url_promocao
 
 def extrair_parametros_url(url):
