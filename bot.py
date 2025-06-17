@@ -15,7 +15,7 @@ load_dotenv()
 
 TOKEN = os.getenv('TOKEN_BOT')
 if not TOKEN:
-    print("[ERRO] TOKEN_BOT não encontrado nas variáveis de ambiente.")
+    logging.error("[ERRO] TOKEN_BOT não encontrado nas variáveis de ambiente.")
     exit(1)
 bot = TeleBot(TOKEN, threaded=False)
 
@@ -27,9 +27,9 @@ try:
         models.Currency.BRL,
         os.getenv('ID_RASTREAMENTO')
     )
-    print("[OK] API do AliExpress configurada com sucesso.")
+    logging.info("[OK] API do AliExpress configurada com sucesso.")
 except Exception as e:
-    print(f"[ERRO] Falha ao configurar API do AliExpress: {e}")
+    logging.error(f"[ERRO] Falha ao configurar API do AliExpress: {e}")
     exit(1)
 
 menu_padrao = types.InlineKeyboardMarkup(row_width=1)
@@ -55,7 +55,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
         try:
             if 'message' in update or 'callback_query' in update:
                 bot.process_new_updates([types.Update.de_json(update)])
-                print("[OK] Update processado com sucesso.")
+                logging.info("[OK] Update processado com sucesso.")
         except Exception as e:
             logging.error(f"Erro ao processar update: {e}")
 
@@ -81,7 +81,6 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
         )
 
         links_afiliados = api_aliexpress.get_affiliate_links(link_carrinho_com_rastreamento)
-        pprint.pp(links_afiliados)
         link_afiliado_carrinho = links_afiliados[0].promotion_link
 
         timestamp = str(int(float("%.2f" % (float(time.time()))) * 1000))
@@ -89,7 +88,6 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
             timestamp,
             f'https://star.aliexpress.com/share/share.htm?platform=AE&businessType=ProductDetail&redirectUrl={link_produto}'
         ])
-        pprint.pp(detalhes_produto)
 
         titulo_produto = detalhes_produto[0].product_title
         preco_produto = detalhes_produto[0].target_sale_price
@@ -117,7 +115,6 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
             reply_to_message_id=mensagem.message_id
         )
 
-
 def extrair_url_do_texto(texto):
     padrao_url = r'https?://\S+|www\.\S+'
     urls = re.findall(padrao_url, texto)
@@ -126,7 +123,7 @@ def extrair_url_do_texto(texto):
 def construir_link_promocao(link_original):
     parametros = extrair_parametros_url(link_original)
 
-    object_id = parametros.get("objectId", [None])[0]
+    object_id = parametros.get("product_id", [None])[0]
     if not object_id:
         m = re.search(r'/item/(\d+).html', link_original)
         if m:
@@ -151,7 +148,7 @@ def criar_url_com_parametros(url_base, parametros):
 
 def obter_link_desconto_carrinho(link_carrinho, mensagem):
     try:
-        link_carrinho_formatado = construir_link_carrinho(link_carrinho)
+        link_carrinho_formatado = construir_link_promocao(link_carrinho)
         link_afiliado = api_aliexpress.get_affiliate_links(link_carrinho_formatado)[0].promotion_link
 
         mensagem_desconto = (
@@ -231,39 +228,39 @@ def registrar_handlers():
                     reply_to_message_id=mensagem.message_id
                 )
         except Exception as e:
-            print(f"[ERRO] Falha ao processar mensagem: {e}")
+            logging.error(f"[ERRO] Falha ao processar mensagem: {e}")
             bot.send_message(
                 mensagem.chat.id,
                 "⚠️ Ocorreu um erro ao processar sua mensagem.\nTente novamente.",
                 reply_to_message_id=mensagem.message_id
             )
 
-    print("[OK] Handler para mensagens registrado.")
+    logging.info("[OK] Handler para mensagens registrado.")
 
 def start_server():
     PORT = int(os.getenv('PORT', 8080))
     server_address = ('', PORT)
     httpd = HTTPServer(server_address, WebhookHandler)
-    print(f"[OK] Servidor HTTP iniciado na porta {PORT}.")
+    logging.info(f"[OK] Servidor HTTP iniciado na porta {PORT}.")
     httpd.serve_forever()
 
 def configurar_webhook():
     url_webhook = os.getenv('URL_WEBHOOK')
     if not url_webhook:
-        print("[ERRO] WEBHOOK_URL não configurado nas variáveis de ambiente.")
+        logging.error("[ERRO] WEBHOOK_URL não configurado nas variáveis de ambiente.")
         return False
     try:
         bot.remove_webhook()
         time.sleep(1)
         sucesso = bot.set_webhook(url_webhook)
         if sucesso:
-            print(f"[OK] Webhook configurado: {url_webhook}")
+            logging.info(f"[OK] Webhook configurado: {url_webhook}")
             return True
         else:
-            print("[ERRO] Falha ao configurar webhook.")
+            logging.error("[ERRO] Falha ao configurar webhook.")
             return False
     except Exception as e:
-        print(f"[ERRO] Exceção ao configurar webhook: {e}")
+        logging.error(f"[ERRO] Exceção ao configurar webhook: {e}")
         return False
     
 def extrair_redirect_url_recursiva(url):
@@ -295,11 +292,11 @@ def resolver_link_ali(link_encurtado, max_redirects=5):
     return url_final
 
 if __name__ == "__main__":
-    print("[INFO] Inicializando bot...")
+    logging.info("[INFO] Inicializando bot...")
 
     registrar_handlers()
 
     if configurar_webhook():
         start_server()
     else:
-        print("[ERRO] Bot não iniciou devido a problema no webhook.")
+        logging.error("[ERRO] Bot não iniciou devido a problema no webhook.")
