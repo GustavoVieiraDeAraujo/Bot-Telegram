@@ -72,14 +72,16 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
     try:
         codigo_rastreamento = os.getenv('ID_RASTREAMENTO')
 
-        link_afiliado_raw = (
-            f'{link_produto}?utm_source={codigo_rastreamento}'
+        link_carrinho = construir_link_carrinho(link_produto)
+
+        link_carrinho_com_rastreamento = (
+            f'{link_carrinho}?utm_source={codigo_rastreamento}'
             f'&sourceType=620&improveDiscount=Y&BuyNow=true'
         )
 
-        links_afiliados = api_aliexpress.get_affiliate_links(link_afiliado_raw)
+        links_afiliados = api_aliexpress.get_affiliate_links(link_carrinho_com_rastreamento)
         pprint.pp(links_afiliados)
-        link_afiliado = links_afiliados[0].promotion_link
+        link_afiliado_carrinho = links_afiliados[0].promotion_link
 
         timestamp = str(int(float("%.2f" % (float(time.time()))) * 1000))
         detalhes_produto = api_aliexpress.get_products_details([
@@ -98,11 +100,11 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
             mensagem.chat.id,
             imagem_produto,
             caption=(
-                "🛒 Seu produto é:\n\n"
+                "🛒 Seu carrinho com desconto está pronto:\n\n"
                 f"{titulo_produto}\n\n"
                 f"💵 Preço do produto: R$ {float(preco_produto):,.2f}\n\n"
-                f"🔗 Comprar agora:\n{link_afiliado}\n\n"
-                "#PromocaoAliXpress ✅"
+                f"🔗 Finalize sua compra no carrinho:\n{link_afiliado_carrinho}\n\n"
+                "#PromocaoAliExpress ✅"
             ),
             reply_markup=menu_padrao,
             reply_to_message_id=mensagem.message_id
@@ -114,6 +116,7 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
             reply_to_message_id=mensagem.message_id
         )
 
+
 def extrair_url_do_texto(texto):
     padrao_url = r'https?://\S+|www\.\S+'
     urls = re.findall(padrao_url, texto)
@@ -121,14 +124,50 @@ def extrair_url_do_texto(texto):
 
 def construir_link_carrinho(link_original):
     parametros = extrair_parametros_url(link_original)
+
+    object_id = parametros.get("objectId", [None])[0]
+    if not object_id:
+        m = re.search(r'/item/(\d+).html', link_original)
+        if m:
+            object_id = m.group(1)
+
+    # Outros parâmetros que podem ou não existir no link original
+    country_code = parametros.get("countryCode", ["BR"])[0]
+    shipping_company = parametros.get("shippingCompany", ["CAINIAO_FULFILLMENT_STD"])[0]
+    province_code = parametros.get("provinceCode", ["903200050000000000"])[0]
+    city_code = parametros.get("cityCode", ["903200050025000000"])[0]
+    ae_order_from = parametros.get("aeOrderFrom", ["main_detail"])[0]
+    sku_attr = parametros.get("skuAttr", [""])[0]
+    sku_id = parametros.get("skuId", [""])[0]
+    sku_custom_attr = parametros.get("skucustomAttr", [""])[0]
+    quantity = parametros.get("quantity", ["1"])[0]
+    spm = parametros.get("spm", ["a2g0o.detail.0.0"])[0]
+    cur_page_log_uid = parametros.get("curPageLogUid", [""])[0]
+    pdp_buy_params = parametros.get("pdpBuyParams", ["{}"])[0]
+    from_param = parametros.get("from", ["aliexpress"])[0]
+
     url_base_carrinho = "https://www.aliexpress.com/p/trade/confirm.html?"
+
     parametros_carrinho = {
-        "availableProductShopcartIds": ",".join(parametros.get("availableProductShopcartIds", [])),
-        "extraParams": json.dumps(
-            {"channelInfo": {"sourceType": "620"}}, 
-            separators=(',', ':')
-        )
+        "objectId": object_id,
+        "from": from_param,
+        "countryCode": country_code,
+        "shippingCompany": shipping_company,
+        "provinceCode": province_code,
+        "cityCode": city_code,
+        "aeOrderFrom": ae_order_from,
+        "skuAttr": sku_attr,
+        "skuId": sku_id,
+        "skucustomAttr": sku_custom_attr,
+        "quantity": quantity,
+        "spm": spm,
+        "curPageLogUid": cur_page_log_uid,
+        "pdpBuyParams": pdp_buy_params,
     }
+
+    # Remove parâmetros com valor None ou string vazia para não poluir a URL
+    parametros_carrinho = {k: v for k, v in parametros_carrinho.items() if v and v != ""}
+
     return criar_url_com_parametros(url_base_carrinho, parametros_carrinho)
 
 def extrair_parametros_url(url):
