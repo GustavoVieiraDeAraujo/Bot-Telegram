@@ -79,18 +79,19 @@ class WebhookHandler(BaseHTTPRequestHandler):
 def obter_links_afiliados(mensagem, id_mensagem, link_produto):
     try:
         codigo_rastreamento = os.getenv('ID_RASTREAMENTO')
+        logging.info(f"Link Produtos: {link_produto}")
 
         link_promocao = construir_link_promocao(link_produto)
-        logging.info(f"Link Promocao: {link_promocao}")
+        logging.info(f"Link Moedas: {link_promocao}")
 
         link_carrinho_com_rastreamento = (
-            f'{link_promocao}?utm_source={codigo_rastreamento}'
+            f'{link_produto}?utm_source={codigo_rastreamento}'
         )
-        logging.info(f"Link Carrinho com Rastreamento: {link_carrinho_com_rastreamento}")
+        logging.info(f"Link Produto com Rastreamento: {link_carrinho_com_rastreamento}")
 
         links_afiliados = api_aliexpress.get_affiliate_links(link_carrinho_com_rastreamento)
         link_afiliado_carrinho = links_afiliados[0].promotion_link
-        logging.info(f"Link Afiliado Carrinho: {link_afiliado_carrinho}")
+        logging.info(f"Link Afiliado Produto: {link_afiliado_carrinho}")
 
         timestamp = str(int(float("%.2f" % (float(time.time()))) * 1000))
         detalhes_produto = api_aliexpress.get_products_details([
