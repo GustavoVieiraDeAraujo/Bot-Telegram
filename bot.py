@@ -81,13 +81,16 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
         codigo_rastreamento = os.getenv('ID_RASTREAMENTO')
 
         link_promocao = construir_link_promocao(link_produto)
+        logging.info(f"Link Promocao: {link_promocao}")
 
         link_carrinho_com_rastreamento = (
             f'{link_promocao}?utm_source={codigo_rastreamento}'
         )
+        logging.info(f"Link Carrinho com Rastreamento: {link_carrinho_com_rastreamento}")
 
         links_afiliados = api_aliexpress.get_affiliate_links(link_carrinho_com_rastreamento)
         link_afiliado_carrinho = links_afiliados[0].promotion_link
+        logging.info(f"Link Afiliado Carrinho: {link_afiliado_carrinho}")
 
         timestamp = str(int(float("%.2f" % (float(time.time()))) * 1000))
         detalhes_produto = api_aliexpress.get_products_details([
@@ -219,13 +222,13 @@ def registrar_handlers():
             url_produto = extrair_url_do_texto(mensagem.text)
             mensagem_carregando = bot.send_message(
                 mensagem.chat.id,
-                "⏳ Aguarde um momento, as ofertas estão sendo preparadas..."
+                "⏳ Aguarde um momento, a oferta está sendo preparada..."
             )
 
             if url_produto and "aliexpress.com" in url_produto:
                 if "s.click.aliexpress.com" in url_produto:
                     url_produto = resolver_link_ali(url_produto)
-
+                    
                 if "availableProductShopcartIds" in url_produto:
                     obter_link_desconto_carrinho(url_produto, mensagem)
                 else:
