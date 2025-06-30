@@ -91,8 +91,6 @@ class WebhookHandler(BaseHTTPRequestHandler):
 def obter_links_afiliados(mensagem, id_mensagem, link_produto):
     try:
         link_promocao = construir_link_promocao(link_produto)
-        link_produto = extrair_link_produto_de_coin_url(link_produto)
-        link_promocao = extrair_link_produto_de_coin_url(link_promocao)
 
         logging.info(f"Link Produto: {link_produto}")
         logging.info(f"Link Moedas: {link_promocao}")
@@ -335,14 +333,6 @@ def resolver_link_ali(link_encurtado, max_redirects=5):
             break
     url_final = extrair_redirect_url_recursiva(url)
     return url_final
-
-
-def extrair_link_produto_de_coin_url(url):
-    parametros = extrair_parametros_url(url)
-    product_id = parametros.get("productIds", [None])[0]
-    if product_id:
-        return f"https://www.aliexpress.com/item/{product_id}.html"
-    return url
 
 
 if __name__ == "__main__":
