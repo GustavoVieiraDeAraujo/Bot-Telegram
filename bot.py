@@ -91,6 +91,9 @@ class WebhookHandler(BaseHTTPRequestHandler):
 def obter_links_afiliados(mensagem, id_mensagem, link_produto):
     try:
         link_promocao = construir_link_promocao(link_produto)
+        link_produto = extrair_link_produto_de_coin_url(link_produto)
+        link_promocao = extrair_link_produto_de_coin_url(link_promocao)
+
         logging.info(f"Link Produto: {link_produto}")
         logging.info(f"Link Moedas: {link_promocao}")
 
@@ -109,7 +112,6 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
         )
 
         titulo_produto = detalhes_produto[0].product_title
-        preco_produto = detalhes_produto[0].target_sale_price
         imagem_produto = detalhes_produto[0].product_main_image_url
 
         bot.delete_message(mensagem.chat.id, id_mensagem)
@@ -118,12 +120,11 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
             mensagem.chat.id,
             imagem_produto,
             caption=(
-                "🛒 Seu carrinho com desconto está pronto:\n\n"
+                "🛒 Seu produto com desconto está pronto:\n\n"
                 f"{titulo_produto}\n\n"
-                f"💵 Preço do produto: R$ {float(preco_produto):,.2f}\n\n"
-                f"🔗 Link moedas:\n{link_moedas}\n\n"
-                f"🔗 Link afiliado :\n{link_afiliado}\n\n"
-                "#PromocaoAliExpress ✅"
+                f"🔗 Link na Aba de moedas:\n{link_moedas}\n\n"
+                f"🔗 Link Direto do produto :\n{link_afiliado}\n\n"
+                "Me acompanhe nas redes sociais abaixo se quiser pagar barato👇👇"
             ),
             reply_markup=menu_padrao,
             reply_to_message_id=mensagem.message_id,
@@ -222,10 +223,10 @@ def registrar_handlers():
             mensagem_boas_vindas = (
                 f"👋 Olá, {nome_usuario}! Seja bem-vindo ao bot de ofertas do AliExpress!\n\n"
                 "Envie qualquer link do AliExpress para gerar:\n\n"
-                "🤑 Bônus de Moedas | 🔥 Super Oferta | ⚡ Oferta Relâmpago\n\n"
+                "🔥 Link com desconto de moedas | ⚡ Link com desconto de afiliado\n\n"
                 "📌 *Como usar:*\n\n"
                 "1️⃣ Envie um link do AliExpress\n"
-                "2️⃣ Escolha a promoção desejada\n"
+                "2️⃣ Escolha o melhor desconto\n"
                 "3️⃣ Aproveite seus descontos!\n\n"
                 "🔗 *Nossos canais:*"
             )
@@ -334,6 +335,14 @@ def resolver_link_ali(link_encurtado, max_redirects=5):
             break
     url_final = extrair_redirect_url_recursiva(url)
     return url_final
+
+
+def extrair_link_produto_de_coin_url(url):
+    parametros = extrair_parametros_url(url)
+    product_id = parametros.get("productIds", [None])[0]
+    if product_id:
+        return f"https://www.aliexpress.com/item/{product_id}.html"
+    return url
 
 
 if __name__ == "__main__":
