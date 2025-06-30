@@ -54,14 +54,9 @@ menu_admin = types.InlineKeyboardMarkup(row_width=1)
 um = types.InlineKeyboardButton("1", url="https://s.click.aliexpress.com/e/_ol8VJ2T")
 dois = types.InlineKeyboardButton("2", url="https://s.click.aliexpress.com/e/_DlCyg5Z")
 tres = types.InlineKeyboardButton("3", url="https://s.click.aliexpress.com/e/_DBBkt9V")
-quatro = types.InlineKeyboardButton(
-    "4", url="https://s.click.aliexpress.com/e/_DdcXZ2r"
-)
+quatro = types.InlineKeyboardButton("4", url="https://s.click.aliexpress.com/e/_DdcXZ2r")
 cinco = types.InlineKeyboardButton("5", url="https://s.click.aliexpress.com/e/_DDs7W5D")
-menu_admin.add(
-    um, dois, tres, quatro, cinco, botao_chat, botao_promocoes, botao_youtube
-)
-
+menu_admin.add(um, dois, tres, quatro, cinco, botao_chat, botao_promocoes, botao_youtube)
 
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -86,7 +81,6 @@ class WebhookHandler(BaseHTTPRequestHandler):
         self.send_header("Content-type", "text/html; charset=utf-8")
         self.end_headers()
         self.wfile.write("Bot está rodando.".encode("utf-8"))
-
 
 def obter_links_afiliados(mensagem, id_mensagem, link_produto):
     try:
@@ -136,16 +130,13 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
             reply_to_message_id=mensagem.message_id,
         )
 
-
 def extrair_url_do_texto(texto):
     padrao_url = r"https?://\S+|www\.\S+"
     urls = re.findall(padrao_url, texto)
     return urls[0] if urls else None
 
-
 def construir_link_promocao(link_original):
     parametros = extrair_parametros_url(link_original)
-
     object_id = parametros.get("product_id", [None])[0]
 
     if not object_id:
@@ -161,25 +152,19 @@ def construir_link_promocao(link_original):
         "?_immersiveMode=true"
         f"&productIds={object_id}"
     )
-
     return url_promocao
-
 
 def extrair_parametros_url(url):
     url_analisada = urlparse(url)
     return parse_qs(url_analisada.query)
 
-
 def criar_url_com_parametros(url_base, parametros):
     return url_base + urlencode(parametros)
-
 
 def obter_link_desconto_carrinho(link_carrinho, mensagem):
     try:
         link_carrinho_formatado = construir_link_promocao(link_carrinho)
-        link_afiliado = api_aliexpress.get_affiliate_links(link_carrinho_formatado)[
-            0
-        ].promotion_link
+        link_afiliado = api_aliexpress.get_affiliate_links(link_carrinho_formatado)[0].promotion_link
 
         mensagem_desconto = (
             f"Este é o link para o desconto no carrinho. \n" f"{str(link_afiliado)}"
@@ -199,7 +184,6 @@ def obter_link_desconto_carrinho(link_carrinho, mensagem):
             f"Algo deu errado \n{e}",
             reply_to_message_id=mensagem.message_id,
         )
-
 
 def registrar_handlers():
     @bot.message_handler(commands=["start"])
@@ -257,9 +241,7 @@ def registrar_handlers():
                 if "availableProductShopcartIds" in url_produto:
                     obter_link_desconto_carrinho(url_produto, mensagem)
                 else:
-                    obter_links_afiliados(
-                        mensagem, mensagem_carregando.message_id, url_produto
-                    )
+                    obter_links_afiliados(mensagem, mensagem_carregando.message_id, url_produto)
             else:
                 bot.delete_message(mensagem.chat.id, mensagem_carregando.message_id)
                 bot.send_message(
@@ -278,14 +260,12 @@ def registrar_handlers():
 
     logging.info("[OK] Handler para mensagens registrado.")
 
-
 def start_server():
     PORT = int(os.getenv("PORT", 8080))
     server_address = ("", PORT)
     httpd = HTTPServer(server_address, WebhookHandler)
     logging.info(f"[OK] Servidor HTTP iniciado na porta {PORT}.")
     httpd.serve_forever()
-
 
 def configurar_webhook():
     url_webhook = os.getenv("URL_WEBHOOK")
@@ -306,40 +286,38 @@ def configurar_webhook():
         logging.error(f"[ERRO] Exceção ao configurar webhook: {e}")
         return False
 
-
 def extrair_redirect_url_recursiva(url):
-    while True:
-        parsed_url = urlparse(url)
+    parsed_url = urlparse(url)
+    query_params = parse_qs(parsed_url.query)
+
+    if "productIds" in query_params:
+        product_id = query_params["productIds"][0]
+        return f"https://www.aliexpress.com/item/{product_id}.html"
+
+    while "redirectUrl" in query_params:
+        redirect_url = unquote(query_params["redirectUrl"][0])
+        parsed_url = urlparse(redirect_url)
         query_params = parse_qs(parsed_url.query)
-        if "redirectUrl" in query_params:
-            redirect_url = unquote(query_params["redirectUrl"][0])
-            if "aliexpress.com/item/" in redirect_url:
-                return redirect_url
-            url = redirect_url
-        else:
-            return url
+        if "aliexpress.com/item/" in redirect_url:
+            return redirect_url
+        url = redirect_url
 
+    return url
 
-def resolver_link_ali(link_encurtado, max_redirects=5):
-    url = link_encurtado
-    session = requests.Session()
-    headers = {"User-Agent": "Mozilla/5.0"}
-    redirects = 0
-
-    while redirects < max_redirects:
-        response = session.head(url, allow_redirects=False, headers=headers)
-        if 300 <= response.status_code < 400 and "Location" in response.headers:
-            url = response.headers["Location"]
-            redirects += 1
-        else:
-            break
-    url_final = extrair_redirect_url_recursiva(url)
-    return url_final
-
+def resolver_link_ali(link_encurtado):
+    try:
+        session = requests.Session()
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = session.get(link_encurtado, headers=headers, allow_redirects=True, timeout=10)
+        final_url = response.url
+        logging.info(f"[INFO] Link final resolvido: {final_url}")
+        return extrair_redirect_url_recursiva(final_url)
+    except Exception as e:
+        logging.error(f"[ERRO] Falha ao resolver link encurtado: {e}")
+        return link_encurtado
 
 if __name__ == "__main__":
     logging.info("[INFO] Inicializando bot...")
-
     registrar_handlers()
 
     if configurar_webhook():
