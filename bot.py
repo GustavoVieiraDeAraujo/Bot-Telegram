@@ -38,16 +38,11 @@ except Exception as e:
     logging.error(f"[ERRO] Falha ao configurar API do AliExpress: {e}")
     exit(1)
 
+# ====================== MENUS ==========================
 menu_padrao = types.InlineKeyboardMarkup(row_width=1)
-botao_chat = types.InlineKeyboardButton(
-    "💬 Chat 💬", url=os.getenv("LINK_TELEGRAM_CHAT")
-)
-botao_promocoes = types.InlineKeyboardButton(
-    "🔥 Promoções 🔥", url=os.getenv("LINK_TELEGRAM_OFERTAS")
-)
-botao_youtube = types.InlineKeyboardButton(
-    "🎥 Youtube 🎥", url=os.getenv("LINK_YOUTUBE")
-)
+botao_chat = types.InlineKeyboardButton("💬 Chat 💬", url=os.getenv("LINK_TELEGRAM_CHAT"))
+botao_promocoes = types.InlineKeyboardButton("🔥 Promoções 🔥", url=os.getenv("LINK_TELEGRAM_OFERTAS"))
+botao_youtube = types.InlineKeyboardButton("🎥 Youtube 🎥", url=os.getenv("LINK_YOUTUBE"))
 menu_padrao.add(botao_chat, botao_promocoes, botao_youtube)
 
 menu_admin = types.InlineKeyboardMarkup(row_width=1)
@@ -58,6 +53,7 @@ quatro = types.InlineKeyboardButton("4", url="https://s.click.aliexpress.com/e/_
 cinco = types.InlineKeyboardButton("5", url="https://s.click.aliexpress.com/e/_DDs7W5D")
 menu_admin.add(um, dois, tres, quatro, cinco, botao_chat, botao_promocoes, botao_youtube)
 
+# ====================== SERVIDOR WEBHOOK ==========================
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         content_length = int(self.headers.get("Content-Length", 0))
@@ -69,7 +65,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 bot.process_new_updates([types.Update.de_json(update)])
                 logging.info("[OK] Update processado com sucesso.")
         except Exception as e:
-            logging.error(f"Erro ao processar update: {e}")
+            logging.error(f"[ERRO] Falha ao processar update: {e}")
 
         self.send_response(200)
         self.send_header("Content-type", "text/plain; charset=utf-8")
@@ -82,14 +78,15 @@ class WebhookHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write("Bot está rodando.".encode("utf-8"))
 
+# ====================== FUNÇÕES PRINCIPAIS ==========================
 def obter_links_afiliados(mensagem, id_mensagem, link_produto):
     try:
         link_promocao = link_produto
         if "coin-index" not in link_produto:
             link_promocao = construir_link_promocao(link_produto)
 
-        logging.info(f"Link Produto: {link_produto}")
-        logging.info(f"Link Moedas: {link_promocao}")
+        logging.info(f"[INFO] Link Produto Original: {link_produto}")
+        logging.info(f"[INFO] Link Promocional: {link_promocao}")
 
         response_afiliados = api_aliexpress.get_affiliate_links(link_produto)
         response_moedas = api_aliexpress.get_affiliate_links(link_promocao)
@@ -97,39 +94,39 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
         link_afiliado = response_afiliados[0].promotion_link
         link_moedas = response_moedas[0].promotion_link
 
-        timestamp = str(int(float("%.2f" % (float(time.time()))) * 1000))
-        detalhes_produto = api_aliexpress.get_products_details(
-            [
-                timestamp,
-                f"https://star.aliexpress.com/share/share.htm?platform=AE&businessType=ProductDetail&redirectUrl={link_produto}",
-            ]
-        )
+        timestamp = str(int(time.time() * 1000))
+        detalhes_produto = api_aliexpress.get_products_details([
+            timestamp,
+            f"https://star.aliexpress.com/share/share.htm?platform=AE&businessType=ProductDetail&redirectUrl={link_produto}",
+        ])
 
         titulo_produto = detalhes_produto[0].product_title
         imagem_produto = detalhes_produto[0].product_main_image_url
 
         bot.delete_message(mensagem.chat.id, id_mensagem)
-
         bot.send_photo(
             mensagem.chat.id,
             imagem_produto,
             caption=(
                 "🛒 Seu produto com desconto está pronto:\n\n"
                 f"{titulo_produto}\n\n"
-                f"🔗 Link na Aba de moedas:\n{link_moedas}\n\n"
-                f"🔗 Link Direto do produto :\n{link_afiliado}\n\n"
-                "Me acompanhe nas redes sociais abaixo se quiser pagar barato👇👇"
+                f"🔗 Link na aba de moedas:\n{link_moedas}\n\n"
+                f"🔗 Link direto do produto:\n{link_afiliado}\n\n"
+                "👇 Me acompanhe nas redes sociais para mais descontos 👇"
             ),
             reply_markup=menu_padrao,
             reply_to_message_id=mensagem.message_id,
         )
+
     except Exception as e:
         bot.send_message(
             mensagem.chat.id,
-            "Algo deu errado \n " + str(e),
+            f"Algo deu errado \n {str(e)}",
             reply_to_message_id=mensagem.message_id,
         )
+        logging.error(f"[ERRO] Falha ao obter links afiliados: {e}")
 
+# ====================== FUNÇÕES DE URL ==========================
 def extrair_url_do_texto(texto):
     padrao_url = r"https?://\S+|www\.\S+"
     urls = re.findall(padrao_url, texto)
@@ -147,16 +144,10 @@ def construir_link_promocao(link_original):
     if not object_id:
         return None
 
-    url_promocao = (
-        "https://m.aliexpress.com/p/coin-index/index.html"
-        "?_immersiveMode=true"
-        f"&productIds={object_id}"
-    )
-    return url_promocao
+    return f"https://m.aliexpress.com/p/coin-index/index.html?_immersiveMode=true&productIds={object_id}"
 
 def extrair_parametros_url(url):
-    url_analisada = urlparse(url)
-    return parse_qs(url_analisada.query)
+    return parse_qs(urlparse(url).query)
 
 def criar_url_com_parametros(url_base, parametros):
     return url_base + urlencode(parametros)
@@ -166,9 +157,7 @@ def obter_link_desconto_carrinho(link_carrinho, mensagem):
         link_carrinho_formatado = construir_link_promocao(link_carrinho)
         link_afiliado = api_aliexpress.get_affiliate_links(link_carrinho_formatado)[0].promotion_link
 
-        mensagem_desconto = (
-            f"Este é o link para o desconto no carrinho. \n" f"{str(link_afiliado)}"
-        )
+        mensagem_desconto = f"Este é o link para o desconto no carrinho:\n{link_afiliado}"
 
         caminho_imagem = "assets/bibi-1.jpg"
         with open(caminho_imagem, "rb") as img:
@@ -184,107 +173,29 @@ def obter_link_desconto_carrinho(link_carrinho, mensagem):
             f"Algo deu errado \n{e}",
             reply_to_message_id=mensagem.message_id,
         )
+        logging.error(f"[ERRO] Falha ao gerar link de carrinho: {e}")
 
-def registrar_handlers():
-    @bot.message_handler(commands=["start"])
-    def handle_start(mensagem):
-        user_id = mensagem.from_user.id
-        nome_usuario = mensagem.from_user.first_name
-
-        if user_id == 5206185262:
-            menu = menu_admin
-            mensagem_boas_vindas = (
-                f"🔐 Olá Papai {nome_usuario}!\n\n"
-                "Você está no menu Admin.\n\n"
-                "Com este painel, você pode:\n\n"
-                "🛠 Enviar notificações aos usuários\n"
-                "📊 Ver estatísticas de uso\n"
-                "📦 Gerenciar promoções e ofertas\n"
-                "⚠️ Use as funcionalidades com responsabilidade!"
-            )
-        else:
-            menu = menu_padrao
-            mensagem_boas_vindas = (
-                f"👋 Olá, {nome_usuario}! Seja bem-vindo ao bot de ofertas do AliExpress!\n\n"
-                "Envie qualquer link do AliExpress para gerar:\n\n"
-                "🔥 Link com desconto de moedas | ⚡ Link com desconto de afiliado\n\n"
-                "📌 *Como usar:*\n\n"
-                "1️⃣ Envie um link do AliExpress\n"
-                "2️⃣ Escolha o melhor desconto\n"
-                "3️⃣ Aproveite seus descontos!\n\n"
-                "🔗 *Nossos canais:*"
-            )
-
-        with open("assets/bibi-2.jpg", "rb") as foto:
-            bot.send_photo(
-                mensagem.chat.id,
-                foto,
-                caption=mensagem_boas_vindas,
-                reply_markup=menu,
-                parse_mode="Markdown",
-                reply_to_message_id=mensagem.message_id,
-            )
-
-    @bot.message_handler(func=lambda m: True)
-    def handle_mensagem(mensagem):
-        try:
-            url_produto = extrair_url_do_texto(mensagem.text)
-            mensagem_carregando = bot.send_message(
-                mensagem.chat.id,
-                "⏳ Aguarde um momento, a oferta está sendo preparada...",
-            )
-
-            if url_produto and "aliexpress.com" in url_produto:
-                if "s.click.aliexpress.com" in url_produto:
-                    url_produto = resolver_link_ali(url_produto)
-
-                if "availableProductShopcartIds" in url_produto:
-                    obter_link_desconto_carrinho(url_produto, mensagem)
-                else:
-                    obter_links_afiliados(mensagem, mensagem_carregando.message_id, url_produto)
-            else:
-                bot.delete_message(mensagem.chat.id, mensagem_carregando.message_id)
-                bot.send_message(
-                    mensagem.chat.id,
-                    "❌ O link é inválido!\nVerifique o link do produto.",
-                    parse_mode="HTML",
-                    reply_to_message_id=mensagem.message_id,
-                )
-        except Exception as e:
-            logging.error(f"[ERRO] Falha ao processar mensagem: {e}")
-            bot.send_message(
-                mensagem.chat.id,
-                "⚠️ Ocorreu um erro ao processar sua mensagem.\nTente novamente.",
-                reply_to_message_id=mensagem.message_id,
-            )
-
-    logging.info("[OK] Handler para mensagens registrado.")
-
-def start_server():
-    PORT = int(os.getenv("PORT", 8080))
-    server_address = ("", PORT)
-    httpd = HTTPServer(server_address, WebhookHandler)
-    logging.info(f"[OK] Servidor HTTP iniciado na porta {PORT}.")
-    httpd.serve_forever()
-
-def configurar_webhook():
-    url_webhook = os.getenv("URL_WEBHOOK")
-    if not url_webhook:
-        logging.error("[ERRO] WEBHOOK_URL não configurado nas variáveis de ambiente.")
-        return False
+# ====================== RESOLUÇÃO DE LINKS ==========================
+def obter_url_final(url_encurtado):
+    """
+    Segue redirecionamentos até obter o link final do produto.
+    Funciona com a.aliexpress.com e s.click.aliexpress.com.
+    """
     try:
-        bot.remove_webhook()
-        time.sleep(1)
-        sucesso = bot.set_webhook(url_webhook)
-        if sucesso:
-            logging.info(f"[OK] Webhook configurado: {url_webhook}")
-            return True
-        else:
-            logging.error("[ERRO] Falha ao configurar webhook.")
-            return False
+        session = requests.Session()
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; TelegramBot/1.0)"}
+        response = session.head(url_encurtado, headers=headers, allow_redirects=True, timeout=10)
+        final_url = response.url
+
+        if "redirect" in final_url or "share" in final_url or "aliexpress.com/item/" not in final_url:
+            response = session.get(final_url, headers=headers, allow_redirects=True, timeout=10)
+            final_url = response.url
+
+        logging.info(f"[INFO] Link final resolvido: {final_url}")
+        return final_url
     except Exception as e:
-        logging.error(f"[ERRO] Exceção ao configurar webhook: {e}")
-        return False
+        logging.error(f"[ERRO] Falha ao resolver URL final: {e}")
+        return url_encurtado
 
 def extrair_redirect_url_recursiva(url):
     parsed_url = urlparse(url)
@@ -305,16 +216,118 @@ def extrair_redirect_url_recursiva(url):
     return url
 
 def resolver_link_ali(link_encurtado):
+    """
+    Resolve links encurtados de afiliados (a.aliexpress.com, s.click.aliexpress.com)
+    """
     try:
-        session = requests.Session()
-        headers = {"User-Agent": "Mozilla/5.0"}
-        response = session.get(link_encurtado, headers=headers, allow_redirects=True, timeout=10)
-        final_url = response.url
-        logging.info(f"[INFO] Link final resolvido: {final_url}")
-        return extrair_redirect_url_recursiva(final_url)
+        final_url = obter_url_final(link_encurtado)
+        resolved_url = extrair_redirect_url_recursiva(final_url)
+
+        if "aliexpress.com/item/" in resolved_url:
+            logging.info(f"[OK] Link resolvido: {resolved_url}")
+            return resolved_url
+        else:
+            logging.warning(f"[WARN] Não foi possível extrair link do produto. Retornando URL final.")
+            return final_url
     except Exception as e:
         logging.error(f"[ERRO] Falha ao resolver link encurtado: {e}")
         return link_encurtado
+
+# ====================== HANDLERS DO TELEGRAM ==========================
+def registrar_handlers():
+    @bot.message_handler(commands=["start"])
+    def handle_start(mensagem):
+        user_id = mensagem.from_user.id
+        nome_usuario = mensagem.from_user.first_name
+
+        if user_id == 5206185262:
+            menu = menu_admin
+            mensagem_boas_vindas = (
+                f"🔐 Olá Papai {nome_usuario}!\n\n"
+                "Você está no menu Admin.\n\n"
+                "🛠 Enviar notificações\n📊 Ver estatísticas\n📦 Gerenciar promoções\n⚠️ Use com cuidado!"
+            )
+        else:
+            menu = menu_padrao
+            mensagem_boas_vindas = (
+                f"👋 Olá, {nome_usuario}!\n\n"
+                "Envie qualquer link do AliExpress para gerar:\n\n"
+                "🔥 Link com desconto de moedas | ⚡ Link com desconto de afiliado\n\n"
+                "1️⃣ Envie o link\n2️⃣ Aguarde o processamento\n3️⃣ Aproveite seus descontos!\n\n"
+                "🔗 *Nossos canais:*"
+            )
+
+        with open("assets/bibi-2.jpg", "rb") as foto:
+            bot.send_photo(
+                mensagem.chat.id,
+                foto,
+                caption=mensagem_boas_vindas,
+                reply_markup=menu,
+                parse_mode="Markdown",
+                reply_to_message_id=mensagem.message_id,
+            )
+
+    @bot.message_handler(func=lambda m: True)
+    def handle_mensagem(mensagem):
+        try:
+            url_produto = extrair_url_do_texto(mensagem.text)
+            mensagem_carregando = bot.send_message(
+                mensagem.chat.id,
+                "⏳ Aguarde um momento, estamos preparando sua oferta...",
+            )
+
+            if url_produto and "aliexpress.com" in url_produto:
+                if any(x in url_produto for x in ["s.click.aliexpress.com", "a.aliexpress.com"]):
+                    url_produto = resolver_link_ali(url_produto)
+
+                if "availableProductShopcartIds" in url_produto:
+                    obter_link_desconto_carrinho(url_produto, mensagem)
+                else:
+                    obter_links_afiliados(mensagem, mensagem_carregando.message_id, url_produto)
+            else:
+                bot.delete_message(mensagem.chat.id, mensagem_carregando.message_id)
+                bot.send_message(
+                    mensagem.chat.id,
+                    "❌ O link enviado não é válido!\nPor favor, envie um link do AliExpress.",
+                    parse_mode="HTML",
+                    reply_to_message_id=mensagem.message_id,
+                )
+        except Exception as e:
+            logging.error(f"[ERRO] Falha ao processar mensagem: {e}")
+            bot.send_message(
+                mensagem.chat.id,
+                "⚠️ Ocorreu um erro ao processar sua mensagem. Tente novamente.",
+                reply_to_message_id=mensagem.message_id,
+            )
+
+    logging.info("[OK] Handlers registrados com sucesso.")
+
+# ====================== INICIALIZAÇÃO ==========================
+def start_server():
+    PORT = int(os.getenv("PORT", 8080))
+    server_address = ("", PORT)
+    httpd = HTTPServer(server_address, WebhookHandler)
+    logging.info(f"[OK] Servidor HTTP iniciado na porta {PORT}.")
+    httpd.serve_forever()
+
+def configurar_webhook():
+    url_webhook = os.getenv("URL_WEBHOOK")
+    if not url_webhook:
+        logging.error("[ERRO] URL_WEBHOOK não configurado nas variáveis de ambiente.")
+        return False
+    try:
+        bot.remove_webhook()
+        time.sleep(1)
+        sucesso = bot.set_webhook(url_webhook)
+        if sucesso:
+            logging.info(f"[OK] Webhook configurado: {url_webhook}")
+            return True
+        else:
+            logging.error("[ERRO] Falha ao configurar webhook.")
+            return False
+    except Exception as e:
+        logging.error(f"[ERRO] Exceção ao configurar webhook: {e}")
+        return False
 
 if __name__ == "__main__":
     logging.info("[INFO] Inicializando bot...")
