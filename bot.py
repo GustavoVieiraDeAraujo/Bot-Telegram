@@ -58,12 +58,19 @@ class WebhookHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         content_length = int(self.headers.get("Content-Length", 0))
         post_data = self.rfile.read(content_length)
-        update = json.loads(post_data.decode("utf-8"))
 
         try:
-            if "message" in update or "callback_query" in update:
+            update = json.loads(post_data.decode("utf-8"))
+            if isinstance(update, dict) and ("message" in update or "callback_query" in update):
                 bot.process_new_updates([types.Update.de_json(update)])
                 logging.info("[OK] Update processado com sucesso.")
+        except json.JSONDecodeError as e:
+            logging.warning(f"[WARN] Payload invalido recebido no webhook: {e}")
+            self.send_response(400)
+            self.send_header("Content-type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b"Invalid JSON")
+            return
         except Exception as e:
             logging.error(f"[ERRO] Falha ao processar update: {e}")
 
