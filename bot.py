@@ -136,7 +136,6 @@ def normalizar_url_canonica(url):
 # ====================== FUNÇÕES PRINCIPAIS ==========================
 def obter_links_afiliados(mensagem, id_mensagem, link_produto):
     try:
-        # ✅ Normaliza o link antes de gerar links afiliados
         link_produto = normalizar_url_canonica(link_produto)
 
         link_promocao = link_produto
@@ -147,14 +146,11 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
         logging.info(f"[INFO] Link Promocional: {link_promocao}")
 
         response_afiliados = api_aliexpress.get_affiliate_links(link_produto)
-        logging.warning(response_afiliados)
         response_moedas = api_aliexpress.get_affiliate_links(link_promocao)
-        logging.warning(response_moedas)
 
-        # ✅ Tratamento seguro: evita erro de atributo ausente
         def extrair_link_promocional(response):
             if not response:
-                return link_produto
+                return None
             item = response[0]
             if hasattr(item, "promotion_link"):
                 return item.promotion_link
@@ -162,11 +158,14 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
                 lista = getattr(item, "promotion_link_list", [])
                 if lista and "promotion_link" in lista[0]:
                     return lista[0]["promotion_link"]
-            logging.warning("[WARN] promotion_link não encontrado no retorno da API.")
-            return link_produto
+            return None
 
         link_afiliado = extrair_link_promocional(response_afiliados)
         link_moedas = extrair_link_promocional(response_moedas)
+
+        partes_legenda = [
+            "🛒 Seu produto com desconto está pronto:\n\n"
+        ]
 
         timestamp = str(int(time.time() * 1000))
         detalhes_produto = api_aliexpress.get_products_details([
@@ -177,17 +176,23 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
         titulo_produto = detalhes_produto[0].product_title
         imagem_produto = detalhes_produto[0].product_main_image_url
 
+        partes_legenda.append(f"{titulo_produto}\n\n")
+
+        if link_moedas:
+            partes_legenda.append(f"🔗 Link na aba de moedas:\n{link_moedas}\n\n")
+
+        if link_afiliado:
+            partes_legenda.append(f"🔗 Link direto do produto:\n{link_afiliado}\n\n")
+
+        partes_legenda.append("👇 Me acompanhe nas redes sociais para mais descontos 👇")
+
+        legenda_final = "".join(partes_legenda)
+
         bot.delete_message(mensagem.chat.id, id_mensagem)
         bot.send_photo(
             mensagem.chat.id,
             imagem_produto,
-            caption=(
-                "🛒 Seu produto com desconto está pronto:\n\n"
-                f"{titulo_produto}\n\n"
-                f"🔗 Link na aba de moedas:\n{link_moedas}\n\n"
-                f"🔗 Link direto do produto:\n{link_afiliado}\n\n"
-                "👇 Me acompanhe nas redes sociais para mais descontos 👇"
-            ),
+            caption=legenda_final,
             reply_markup=menu_padrao,
             reply_to_message_id=mensagem.message_id,
         )
@@ -199,6 +204,7 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
             reply_to_message_id=mensagem.message_id,
         )
         logging.error(f"[ERRO] Falha ao obter links afiliados: {e}")
+
 
 
 # ====================== FUNÇÕES DE URL ==========================
