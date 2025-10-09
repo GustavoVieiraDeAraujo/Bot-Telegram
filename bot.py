@@ -136,6 +136,7 @@ def normalizar_url_canonica(url):
 # ====================== FUNÇÕES PRINCIPAIS ==========================
 def obter_links_afiliados(mensagem, id_mensagem, link_produto):
     try:
+        # ✅ Normaliza o link antes de gerar links afiliados
         link_produto = normalizar_url_canonica(link_produto)
 
         link_promocao = link_produto
@@ -145,57 +146,114 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
         logging.info(f"[INFO] Link Produto Original: {link_produto}")
         logging.info(f"[INFO] Link Promocional: {link_promocao}")
 
-        response_afiliados = api_aliexpress.get_affiliate_links(link_produto)
-        response_moedas = api_aliexpress.get_affiliate_links(link_promocao)
+        # ===== Chamadas à API com tratamento de exceções =====
+        try:
+            response_afiliados = api_aliexpress.get_affiliate_links(link_produto)
+            logging.warning(response_afiliados)
+        except Exception as e:
+            logging.warning(f"[WARN] get_affiliate_links (afiliados) falhou: {e}")
+            response_afiliados = None
 
+        try:
+            response_moedas = api_aliexpress.get_affiliate_links(link_promocao)
+            logging.warning(response_moedas)
+        except Exception as e:
+            logging.warning(f"[WARN] get_affiliate_links (moedas) falhou: {e}")
+            response_moedas = None
+
+        # ===== Extrai o primeiro link válido dentro das respostas =====
         def extrair_link_promocional(response):
             if not response:
                 return None
-            item = response[0]
-            if hasattr(item, "promotion_link"):
-                return item.promotion_link
-            elif hasattr(item, "promotion_link_list"):
-                lista = getattr(item, "promotion_link_list", [])
-                if lista and "promotion_link" in lista[0]:
-                    return lista[0]["promotion_link"]
+            # tenta iterar sobre a resposta; se não for iterável, transforma em lista
+            try:
+                itens = list(response)
+            except Exception:
+                itens = [response]
+            for item in itens:
+                # objeto comum com atributo promotion_link
+                if hasattr(item, "promotion_link") and item.promotion_link:
+                    return item.promotion_link
+                # objeto com source_value (às vezes usado para coin-index)
+                if hasattr(item, "source_value") and item.source_value:
+                    return item.source_value
+                # tenta acessar __dict__ como fallback
+                try:
+                    d = getattr(item, "__dict__", None)
+                    if isinstance(d, dict):
+                        if "promotion_link" in d and d["promotion_link"]:
+                            return d["promotion_link"]
+                        if "source_value" in d and d["source_value"]:
+                            return d["source_value"]
+                except Exception:
+                    pass
             return None
 
         link_afiliado = extrair_link_promocional(response_afiliados)
         link_moedas = extrair_link_promocional(response_moedas)
 
-        partes_legenda = [
-            "🛒 Seu produto com desconto está pronto:\n\n"
-        ]
+        # ===== Tenta obter detalhes do produto, mas se falhar segue adiante =====
+        titulo_produto = None
+        imagem_produto = None
+        try:
+            timestamp = str(int(time.time() * 1000))
+            detalhes_produto = api_aliexpress.get_products_details([
+                timestamp,
+                f"https://star.aliexpress.com/share/share.htm?platform=AE&businessType=ProductDetail&redirectUrl={link_produto}",
+            ])
+            if detalhes_produto and len(detalhes_produto) > 0:
+                # esses campos podem existir dependendo do retorno
+                titulo_produto = getattr(detalhes_produto[0], "product_title", None)
+                imagem_produto = getattr(detalhes_produto[0], "product_main_image_url", None)
+        except Exception as e:
+            logging.warning(f"[WARN] get_products_details falhou: {e} — continuando sem título/imagem.")
 
-        timestamp = str(int(time.time() * 1000))
-        detalhes_produto = api_aliexpress.get_products_details([
-            timestamp,
-            f"https://star.aliexpress.com/share/share.htm?platform=AE&businessType=ProductDetail&redirectUrl={link_produto}",
-        ])
+        # ===== Remove mensagem de carregando (se existir) =====
+        try:
+            bot.delete_message(mensagem.chat.id, id_mensagem)
+        except Exception:
+            pass
 
-        titulo_produto = detalhes_produto[0].product_title
-        imagem_produto = detalhes_produto[0].product_main_image_url
+        # ===== Monta legenda dinamicamente mostrando apenas links existentes =====
+        partes = ["🛒 Seu produto com desconto está pronto:\n\n"]
+        if titulo_produto:
+            partes.append(f"{titulo_produto}\n\n")
 
-        partes_legenda.append(f"{titulo_produto}\n\n")
-
+        # só adiciona cada bloco se existir
         if link_moedas:
-            partes_legenda.append(f"🔗 Link na aba de moedas:\n{link_moedas}\n\n")
+            partes.append(f"🔗 Link na aba de moedas:\n{link_moedas}\n\n")
 
         if link_afiliado:
-            partes_legenda.append(f"🔗 Link direto do produto:\n{link_afiliado}\n\n")
+            partes.append(f"🔗 Link direto do produto:\n{link_afiliado}\n\n")
 
-        partes_legenda.append("👇 Me acompanhe nas redes sociais para mais descontos 👇")
+        partes.append("👇 Me acompanhe nas redes sociais para mais descontos 👇")
+        legenda_final = "".join(partes)
 
-        legenda_final = "".join(partes_legenda)
-
-        bot.delete_message(mensagem.chat.id, id_mensagem)
-        bot.send_photo(
-            mensagem.chat.id,
-            imagem_produto,
-            caption=legenda_final,
-            reply_markup=menu_padrao,
-            reply_to_message_id=mensagem.message_id,
-        )
+        # ===== Envio: se tiver imagem, tenta enviar como foto; senão envia texto =====
+        if imagem_produto:
+            try:
+                bot.send_photo(
+                    mensagem.chat.id,
+                    imagem_produto,
+                    caption=legenda_final,
+                    reply_markup=menu_padrao,
+                    reply_to_message_id=mensagem.message_id,
+                )
+            except Exception as e:
+                logging.warning(f"[WARN] Falha ao enviar foto: {e} — enviando texto.")
+                bot.send_message(
+                    mensagem.chat.id,
+                    legenda_final,
+                    reply_markup=menu_padrao,
+                    reply_to_message_id=mensagem.message_id,
+                )
+        else:
+            bot.send_message(
+                mensagem.chat.id,
+                legenda_final,
+                reply_markup=menu_padrao,
+                reply_to_message_id=mensagem.message_id,
+            )
 
     except Exception as e:
         bot.send_message(
@@ -204,8 +262,6 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
             reply_to_message_id=mensagem.message_id,
         )
         logging.error(f"[ERRO] Falha ao obter links afiliados: {e}")
-
-
 
 # ====================== FUNÇÕES DE URL ==========================
 def extrair_url_do_texto(texto):
