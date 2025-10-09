@@ -136,7 +136,6 @@ def normalizar_url_canonica(url):
 # ====================== FUNÇÕES PRINCIPAIS ==========================
 def obter_links_afiliados(mensagem, id_mensagem, link_produto):
     try:
-        # ✅ Normaliza o link antes de gerar links afiliados
         link_produto = normalizar_url_canonica(link_produto)
 
         link_promocao = link_produto
@@ -146,7 +145,6 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
         logging.info(f"[INFO] Link Produto Original: {link_produto}")
         logging.info(f"[INFO] Link Promocional: {link_promocao}")
 
-        # ===== Chamadas à API com tratamento de exceções =====
         try:
             response_afiliados = api_aliexpress.get_affiliate_links(link_produto)
             logging.warning(response_afiliados)
@@ -161,23 +159,18 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
             logging.warning(f"[WARN] get_affiliate_links (moedas) falhou: {e}")
             response_moedas = None
 
-        # ===== Extrai o primeiro link válido dentro das respostas =====
         def extrair_link_promocional(response):
             if not response:
                 return None
-            # tenta iterar sobre a resposta; se não for iterável, transforma em lista
             try:
                 itens = list(response)
             except Exception:
                 itens = [response]
             for item in itens:
-                # objeto comum com atributo promotion_link
                 if hasattr(item, "promotion_link") and item.promotion_link:
                     return item.promotion_link
-                # objeto com source_value (às vezes usado para coin-index)
                 if hasattr(item, "source_value") and item.source_value:
                     return item.source_value
-                # tenta acessar __dict__ como fallback
                 try:
                     d = getattr(item, "__dict__", None)
                     if isinstance(d, dict):
@@ -191,35 +184,32 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
 
         link_afiliado = extrair_link_promocional(response_afiliados)
         link_moedas = extrair_link_promocional(response_moedas)
-
-        # ===== Tenta obter detalhes do produto, mas se falhar segue adiante =====
+        
         titulo_produto = None
         imagem_produto = None
         try:
-            timestamp = str(int(time.time() * 1000))
-            detalhes_produto = api_aliexpress.get_products_details([
-                timestamp,
-                f"https://star.aliexpress.com/share/share.htm?platform=AE&businessType=ProductDetail&redirectUrl={link_produto}",
-            ])
-            if detalhes_produto and len(detalhes_produto) > 0:
-                # esses campos podem existir dependendo do retorno
-                titulo_produto = getattr(detalhes_produto[0], "product_title", None)
-                imagem_produto = getattr(detalhes_produto[0], "product_main_image_url", None)
+            match = re.search(r"/item/(\d+)\.html", link_produto)
+            product_id = match.group(1) if match else None
+
+            if product_id:
+                detalhes_produto = api_aliexpress.get_products_details([product_id])
+                if detalhes_produto and len(detalhes_produto) > 0:
+                    titulo_produto = getattr(detalhes_produto[0], "product_title", None)
+                    imagem_produto = getattr(detalhes_produto[0], "product_main_image_url", None)
+            else:
+                logging.warning("[WARN] ID do produto não encontrado — pulando detalhes.")
         except Exception as e:
             logging.warning(f"[WARN] get_products_details falhou: {e} — continuando sem título/imagem.")
 
-        # ===== Remove mensagem de carregando (se existir) =====
         try:
             bot.delete_message(mensagem.chat.id, id_mensagem)
         except Exception:
             pass
 
-        # ===== Monta legenda dinamicamente mostrando apenas links existentes =====
         partes = ["🛒 Seu produto com desconto está pronto:\n\n"]
         if titulo_produto:
             partes.append(f"{titulo_produto}\n\n")
 
-        # só adiciona cada bloco se existir
         if link_moedas:
             partes.append(f"🔗 Link na aba de moedas:\n{link_moedas}\n\n")
 
@@ -229,7 +219,6 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
         partes.append("👇 Me acompanhe nas redes sociais para mais descontos 👇")
         legenda_final = "".join(partes)
 
-        # ===== Envio: se tiver imagem, tenta enviar como foto; senão envia texto =====
         if imagem_produto:
             try:
                 bot.send_photo(
