@@ -149,8 +149,22 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
         response_afiliados = api_aliexpress.get_affiliate_links(link_produto)
         response_moedas = api_aliexpress.get_affiliate_links(link_promocao)
 
-        link_afiliado = response_afiliados[0].promotion_link
-        link_moedas = response_moedas[0].promotion_link
+        # ✅ Tratamento seguro: evita erro de atributo ausente
+        def extrair_link_promocional(response):
+            if not response:
+                return link_produto
+            item = response[0]
+            if hasattr(item, "promotion_link"):
+                return item.promotion_link
+            elif hasattr(item, "promotion_link_list"):
+                lista = getattr(item, "promotion_link_list", [])
+                if lista and "promotion_link" in lista[0]:
+                    return lista[0]["promotion_link"]
+            logging.warning("[WARN] promotion_link não encontrado no retorno da API.")
+            return link_produto
+
+        link_afiliado = extrair_link_promocional(response_afiliados)
+        link_moedas = extrair_link_promocional(response_moedas)
 
         timestamp = str(int(time.time() * 1000))
         detalhes_produto = api_aliexpress.get_products_details([
@@ -183,6 +197,7 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
             reply_to_message_id=mensagem.message_id,
         )
         logging.error(f"[ERRO] Falha ao obter links afiliados: {e}")
+
 
 # ====================== FUNÇÕES DE URL ==========================
 def extrair_url_do_texto(texto):
