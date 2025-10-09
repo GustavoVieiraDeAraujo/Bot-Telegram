@@ -147,7 +147,9 @@ def obter_links_afiliados(mensagem, id_mensagem, link_produto):
         logging.info(f"[INFO] Link Promocional: {link_promocao}")
 
         response_afiliados = api_aliexpress.get_affiliate_links(link_produto)
+        logging.warning(response_afiliados)
         response_moedas = api_aliexpress.get_affiliate_links(link_promocao)
+        logging.warning(response_moedas)
 
         # ✅ Tratamento seguro: evita erro de atributo ausente
         def extrair_link_promocional(response):
